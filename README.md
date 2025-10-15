@@ -1,5 +1,10 @@
 # oktofetch
 
+[![CI](https://github.com/mhalder/oktofetch/workflows/CI/badge.svg)](https://github.com/mhalder/oktofetch/actions)
+[![codecov](https://codecov.io/gh/mhalder/oktofetch/branch/main/graph/badge.svg)](https://codecov.io/gh/mhalder/oktofetch)
+[![Crates.io](https://img.shields.io/crates/v/oktofetch.svg)](https://crates.io/crates/oktofetch)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A simple CLI tool to manage GitHub release binaries for Linux x86_64.
 
 ## Features
