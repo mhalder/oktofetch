@@ -35,12 +35,16 @@ pub async fn add_tool(
 
 fn asset_priority(name: &str) -> u8 {
     let name = name.to_lowercase();
-    if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
-        0 // Highest priority
+    if name.ends_with(".tar.gz")
+        || name.ends_with(".tgz")
+        || name.ends_with(".tar.bz2")
+        || name.ends_with(".tbz")
+    {
+        0 // Highest priority (all tar formats)
     } else if name.ends_with(".zip") {
         1 // Second priority
     } else {
-        2 // Lowest priority
+        2 // Lowest priority (including standalone binaries)
     }
 }
 

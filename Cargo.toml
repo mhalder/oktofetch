@@ -32,6 +32,7 @@ toml = "0.8"
 # Archive handling
 tar = "0.4"
 flate2 = "1.0"
+bzip2 = "0.4"
 zip = "0.6"
 
 # Progress indicators
