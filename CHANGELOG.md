@@ -1,3 +1,13 @@
+## [1.0.1](https://github.com/mhalder/oktofetch/compare/v1.0.0...v1.0.1) (2025-10-15)
+
+### Bug Fixes
+
+* improve archive extraction and binary detection ([50fc7e5](https://github.com/mhalder/oktofetch/commit/50fc7e529ad084e4a181ccc66fab1869c1ce0f9c))
+
+### Documentation
+
+* add badges to README ([a60a2c2](https://github.com/mhalder/oktofetch/commit/a60a2c2d00b0089a5ca0c52e58f435c906c733d3))
+
 ## 1.0.0 (2025-10-15)
 
 ### Features
