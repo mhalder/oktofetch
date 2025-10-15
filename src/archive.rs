@@ -10,13 +10,13 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<Vec<Strin
 
     if file_name.ends_with(".tar.gz") || file_name.ends_with(".tgz") {
         extract_tar_gz(archive_path, dest_dir)
+    } else if file_name.ends_with(".tar.bz2") || file_name.ends_with(".tbz") {
+        extract_tar_bz2(archive_path, dest_dir)
     } else if file_name.ends_with(".zip") {
         extract_zip(archive_path, dest_dir)
     } else {
-        Err(OktofetchError::ExtractionFailed(format!(
-            "Unsupported archive format: {}",
-            file_name
-        )))
+        // Not a recognized archive format, check if it's a standalone binary
+        handle_standalone_binary(archive_path, dest_dir, file_name)
     }
 }
 
@@ -43,6 +43,51 @@ fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
         }
 
         let dest_path = dest_dir.join(&path);
+
+        // Create parent directories if needed
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        entry.unpack(&dest_path)?;
+
+        if let Some(path_str) = path.to_str() {
+            extracted_files.push(path_str.to_string());
+        }
+    }
+
+    Ok(extracted_files)
+}
+
+fn extract_tar_bz2(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
+    use bzip2::read::BzDecoder;
+    use tar::Archive;
+
+    let file = File::open(archive_path)?;
+    let bz = BzDecoder::new(file);
+    let mut archive = Archive::new(bz);
+
+    let mut extracted_files = Vec::new();
+
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.to_path_buf();
+
+        // Security: prevent path traversal
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            continue;
+        }
+
+        let dest_path = dest_dir.join(&path);
+
+        // Create parent directories if needed
+        if let Some(parent) = dest_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         entry.unpack(&dest_path)?;
 
         if let Some(path_str) = path.to_str() {
@@ -54,6 +99,7 @@ fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
 }
 
 fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
+    use std::os::unix::fs::PermissionsExt;
     use zip::ZipArchive;
 
     let file = File::open(archive_path)?;
@@ -80,12 +126,84 @@ fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
             }
             let mut outfile = File::create(&outpath)?;
             std::io::copy(&mut file, &mut outfile)?;
+
+            // Check if the file is a binary and set executable permissions
+            if is_elf_binary(&outpath)? {
+                let mut perms = std::fs::metadata(&outpath)?.permissions();
+                perms.set_mode(0o755);
+                std::fs::set_permissions(&outpath, perms)?;
+            }
         }
 
         extracted_files.push(file.name().to_string());
     }
 
     Ok(extracted_files)
+}
+
+fn is_elf_binary(path: &Path) -> Result<bool> {
+    use std::io::Read;
+
+    let mut file = File::open(path)?;
+    let mut header = [0u8; 4];
+
+    // Try to read the first 4 bytes
+    match file.read_exact(&mut header) {
+        Ok(_) => {
+            // ELF magic number is 0x7F 'E' 'L' 'F'
+            Ok(header == [0x7F, b'E', b'L', b'F'])
+        }
+        Err(_) => Ok(false), // File too small or error, not a binary
+    }
+}
+
+fn handle_standalone_binary(
+    binary_path: &Path,
+    dest_dir: &Path,
+    file_name: &str,
+) -> Result<Vec<String>> {
+    use std::io::Read;
+    use std::os::unix::fs::PermissionsExt;
+
+    // Check file size first
+    let metadata = std::fs::metadata(binary_path)?;
+    if metadata.len() == 0 {
+        return Err(OktofetchError::ExtractionFailed(format!(
+            "Downloaded file is empty: {}",
+            file_name
+        )));
+    }
+
+    // Check if it's a binary file by looking for ELF header (Linux/Unix)
+    let mut file = File::open(binary_path)?;
+    let mut header = [0u8; 4];
+    file.read_exact(&mut header)?;
+
+    // ELF magic number is 0x7F 'E' 'L' 'F'
+    let is_elf = header == [0x7F, b'E', b'L', b'F'];
+
+    if !is_elf {
+        return Err(OktofetchError::ExtractionFailed(format!(
+            "Unsupported archive format: {}",
+            file_name
+        )));
+    }
+
+    // Check if the binary is already in the dest directory (to avoid copying to itself)
+    let dest_path = dest_dir.join(file_name);
+
+    if binary_path != dest_path {
+        // Binary is in a different location, copy it
+        std::fs::copy(binary_path, &dest_path)?;
+    }
+
+    // Make it executable
+    let mut perms = std::fs::metadata(&dest_path)?.permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&dest_path, perms)?;
+
+    // Return the binary as the "extracted" file
+    Ok(vec![file_name.to_string()])
 }
 
 #[cfg(test)]
@@ -331,5 +449,128 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(extract_dir.join("test.txt").exists());
+    }
+
+    #[test]
+    fn test_extract_tar_bz2() {
+        use bzip2::Compression;
+        use bzip2::write::BzEncoder;
+        use tar::Builder;
+
+        let temp_dir = TempDir::new().unwrap();
+        let archive_path = temp_dir.path().join("test.tar.bz2");
+
+        // Create a tar.bz2 archive with test files
+        let tar_bz2 = fs::File::create(&archive_path).unwrap();
+        let enc = BzEncoder::new(tar_bz2, Compression::default());
+        let mut tar = Builder::new(enc);
+
+        let mut header = tar::Header::new_gnu();
+        let content = b"bz2 test content";
+        header.set_size(content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        tar.append_data(&mut header, "test.txt", &content[..])
+            .unwrap();
+        let enc = tar.into_inner().unwrap();
+        enc.finish().unwrap();
+
+        // Extract
+        let extract_dir = temp_dir.path().join("extracted");
+        fs::create_dir(&extract_dir).unwrap();
+        let result = extract_archive(&archive_path, &extract_dir);
+
+        assert!(result.is_ok());
+        let files = result.unwrap();
+        assert!(!files.is_empty());
+        assert!(extract_dir.join("test.txt").exists());
+        assert_eq!(
+            fs::read_to_string(extract_dir.join("test.txt")).unwrap(),
+            "bz2 test content"
+        );
+    }
+
+    #[test]
+    fn test_extract_tbz_extension() {
+        use bzip2::Compression;
+        use bzip2::write::BzEncoder;
+        use tar::Builder;
+
+        let temp_dir = TempDir::new().unwrap();
+        let archive_path = temp_dir.path().join("test.tbz");
+
+        // Create a .tbz archive
+        let tar_bz2 = fs::File::create(&archive_path).unwrap();
+        let enc = BzEncoder::new(tar_bz2, Compression::default());
+        let mut tar = Builder::new(enc);
+
+        let mut header = tar::Header::new_gnu();
+        let content = b"tbz content";
+        header.set_size(content.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        tar.append_data(&mut header, "test.txt", &content[..])
+            .unwrap();
+        let enc = tar.into_inner().unwrap();
+        enc.finish().unwrap();
+
+        // Extract
+        let extract_dir = temp_dir.path().join("extracted");
+        fs::create_dir(&extract_dir).unwrap();
+        let result = extract_archive(&archive_path, &extract_dir);
+
+        assert!(result.is_ok());
+        assert!(extract_dir.join("test.txt").exists());
+        assert_eq!(
+            fs::read_to_string(extract_dir.join("test.txt")).unwrap(),
+            "tbz content"
+        );
+    }
+
+    #[test]
+    fn test_extract_standalone_binary() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let binary_path = temp_dir.path().join("test-binary");
+
+        // Create a fake ELF binary (with ELF magic header)
+        let mut elf_data = vec![0x7F, b'E', b'L', b'F'];
+        elf_data.extend_from_slice(&[0u8; 100]); // Add some padding
+        fs::write(&binary_path, &elf_data).unwrap();
+
+        // Extract
+        let extract_dir = temp_dir.path().join("extracted");
+        fs::create_dir(&extract_dir).unwrap();
+        let result = extract_archive(&binary_path, &extract_dir);
+
+        assert!(result.is_ok());
+        let extracted_files = result.unwrap();
+        assert_eq!(extracted_files.len(), 1);
+        assert_eq!(extracted_files[0], "test-binary");
+
+        let extracted_binary = extract_dir.join("test-binary");
+        assert!(extracted_binary.exists());
+
+        // Check that it's executable
+        let metadata = fs::metadata(&extracted_binary).unwrap();
+        let permissions = metadata.permissions();
+        assert_ne!(permissions.mode() & 0o111, 0);
+    }
+
+    #[test]
+    fn test_extract_non_binary_unsupported_format() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.rar");
+
+        // Create a file that's not an ELF binary
+        fs::write(&file_path, b"not an elf binary").unwrap();
+
+        let extract_dir = temp_dir.path().join("extracted");
+        fs::create_dir(&extract_dir).unwrap();
+
+        let result = extract_archive(&file_path, &extract_dir);
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("Unsupported archive format"));
     }
 }

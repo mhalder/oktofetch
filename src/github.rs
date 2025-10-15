@@ -37,7 +37,13 @@ impl GithubClient {
         let mut request = self.client.get(&url).header("User-Agent", "oktofetch");
 
         if let Some(token) = &self.token {
-            request = request.header("Authorization", format!("token {}", token));
+            // Use "Bearer" for fine-grained tokens (github_pat_*), "token" for classic tokens
+            let auth_prefix = if token.starts_with("github_pat_") {
+                "Bearer"
+            } else {
+                "token"
+            };
+            request = request.header("Authorization", format!("{} {}", auth_prefix, token));
         }
 
         let response = request.send().await?;
@@ -72,6 +78,8 @@ impl GithubClient {
         let mut file = tokio::fs::File::create(dest).await?;
         let content = response.bytes().await?;
         file.write_all(&content).await?;
+        file.flush().await?;
+        file.sync_all().await?;
 
         Ok(())
     }

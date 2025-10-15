@@ -1104,6 +1104,7 @@ name = "oktofetch"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "bzip2",
  "clap",
  "directories",
  "flate2",
