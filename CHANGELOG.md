@@ -1,3 +1,9 @@
+## [1.0.3](https://github.com/mhalder/oktofetch/compare/v1.0.2...v1.0.3) (2025-12-29)
+
+### Bug Fixes
+
+* detect ELF binaries without execute permissions ([#9](https://github.com/mhalder/oktofetch/issues/9)) ([ee56174](https://github.com/mhalder/oktofetch/commit/ee56174d66c4831b63d0e2dc6b5a3eaf1259f977)), closes [#8](https://github.com/mhalder/oktofetch/issues/8)
+
 ## [1.0.2](https://github.com/mhalder/oktofetch/compare/v1.0.1...v1.0.2) (2025-12-29)
 
 ### Bug Fixes
