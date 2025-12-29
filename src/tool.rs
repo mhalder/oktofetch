@@ -81,7 +81,7 @@ pub async fn update_tool(
 
     // Check if binary exists on disk
     let binary_name = tool.binary_name.as_deref().unwrap_or(&tool.name);
-    let binary_path = config.settings.install_dir.join(binary_name);
+    let binary_path = config.settings.install_dir().join(binary_name);
     let binary_exists = binary_path.exists();
 
     if !binary_exists {
@@ -164,7 +164,7 @@ pub async fn update_tool(
     }
 
     // Install binary
-    let dest = binary::install_binary(&binary_path, &config.settings.install_dir, binary_name)?;
+    let dest = binary::install_binary(&binary_path, &config.settings.install_dir(), binary_name)?;
 
     // Update version in config
     config.update_tool_version(&tool.name, release.tag_name.clone())?;
@@ -200,7 +200,7 @@ pub fn remove_tool(config: &mut Config, tool_name: &str) -> Result<()> {
     println!("Removed tool '{}'", tool_name);
     println!(
         "Note: Binary in {} not removed",
-        config.settings.install_dir.display()
+        config.settings.install_dir().display()
     );
     Ok(())
 }

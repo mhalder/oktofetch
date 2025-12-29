@@ -14,7 +14,31 @@ pub struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    pub install_dir: PathBuf,
+    #[serde(rename = "install_dir")]
+    raw_install_dir: String,
+    #[serde(skip)]
+    expanded_install_dir: Option<PathBuf>,
+}
+
+impl Settings {
+    pub fn new(install_dir: &str) -> Self {
+        let expanded = expand_path(install_dir);
+        Self {
+            raw_install_dir: install_dir.to_string(),
+            expanded_install_dir: Some(PathBuf::from(expanded)),
+        }
+    }
+
+    pub fn install_dir(&self) -> PathBuf {
+        self.expanded_install_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(expand_path(&self.raw_install_dir)))
+    }
+
+    pub fn set_install_dir(&mut self, path: &str) {
+        self.raw_install_dir = path.to_string();
+        self.expanded_install_dir = Some(PathBuf::from(expand_path(path)));
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,9 +138,9 @@ impl Config {
         let mut config: Self = toml::from_str(&content)
             .map_err(|e| OktofetchError::ConfigError(e.to_string(), config_path))?;
 
-        // Expand environment variables and tilde in install_dir
-        let expanded_path = expand_path(&config.settings.install_dir.to_string_lossy());
-        config.settings.install_dir = PathBuf::from(expanded_path);
+        // Initialize the expanded path
+        config.settings.expanded_install_dir =
+            Some(PathBuf::from(expand_path(&config.settings.raw_install_dir)));
 
         Ok(config)
     }
@@ -183,11 +207,8 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Self {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-        let install_dir = PathBuf::from(home).join(".local/bin");
-
         Self {
-            settings: Settings { install_dir },
+            settings: Settings::new("~/.local/bin"),
             tools: Vec::new(),
         }
     }
@@ -205,7 +226,7 @@ mod tests {
         assert!(
             config
                 .settings
-                .install_dir
+                .install_dir()
                 .to_string_lossy()
                 .contains(".local/bin")
         );
@@ -296,7 +317,7 @@ mod tests {
 
         // Create a config with a tool
         let mut config = Config::default();
-        config.settings.install_dir = PathBuf::from("/custom/path");
+        config.settings.set_install_dir("/custom/path");
         let tool = Tool {
             name: "k9s".to_string(),
             repo: "derailed/k9s".to_string(),
@@ -319,7 +340,7 @@ mod tests {
         assert_eq!(loaded_config.tools[0].repo, "derailed/k9s");
         assert_eq!(loaded_config.tools[0].version, Some("v0.32.5".to_string()));
         assert_eq!(
-            loaded_config.settings.install_dir,
+            loaded_config.settings.install_dir(),
             PathBuf::from("/custom/path")
         );
     }
@@ -551,7 +572,7 @@ mod tests {
         assert!(
             config
                 .settings
-                .install_dir
+                .install_dir()
                 .to_string_lossy()
                 .ends_with(".local/bin")
         );
@@ -584,16 +605,14 @@ mod tests {
 
     #[test]
     fn test_settings_serialization() {
-        let settings = Settings {
-            install_dir: PathBuf::from("/custom/path"),
-        };
+        let settings = Settings::new("/custom/path");
 
         let serialized = toml::to_string(&settings).unwrap();
         assert!(serialized.contains("install_dir"));
         assert!(serialized.contains("/custom/path"));
 
         let deserialized: Settings = toml::from_str(&serialized).unwrap();
-        assert_eq!(deserialized.install_dir, PathBuf::from("/custom/path"));
+        assert_eq!(deserialized.install_dir(), PathBuf::from("/custom/path"));
     }
 
     #[test]

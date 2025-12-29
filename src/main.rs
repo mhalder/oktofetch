@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 use std::process;
 
 mod archive;
@@ -176,7 +175,7 @@ fn show_config(config: &Config) -> Result<()> {
     println!("Configuration:");
     println!(
         "  Install directory: {}",
-        config.settings.install_dir.display()
+        config.settings.install_dir().display()
     );
     println!("  Config file: {}", Config::config_path()?.display());
     Ok(())
@@ -185,7 +184,7 @@ fn show_config(config: &Config) -> Result<()> {
 fn set_config(config: &mut Config, key: &str, value: &str) -> Result<()> {
     match key {
         "install_dir" => {
-            config.settings.install_dir = PathBuf::from(value);
+            config.settings.set_install_dir(value);
             config.save()?;
             println!("Set install_dir to {}", value);
             Ok(())
@@ -200,6 +199,7 @@ fn set_config(config: &mut Config, key: &str, value: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_show_tool_info_not_found() {
@@ -242,14 +242,10 @@ mod tests {
     #[test]
     fn test_set_config_logic() {
         let mut config = Config::default();
-        let original_dir = config.settings.install_dir.clone();
 
         // Just test the logic without saving
-        config.settings.install_dir = PathBuf::from("/custom/path");
-        assert_eq!(config.settings.install_dir, PathBuf::from("/custom/path"));
-
-        // Restore
-        config.settings.install_dir = original_dir;
+        config.settings.set_install_dir("/custom/path");
+        assert_eq!(config.settings.install_dir(), PathBuf::from("/custom/path"));
     }
 
     #[test]
@@ -290,8 +286,8 @@ mod tests {
         let new_path = "/tmp/test_install";
 
         // Test the set_config function logic
-        config.settings.install_dir = PathBuf::from(new_path);
-        assert_eq!(config.settings.install_dir, PathBuf::from(new_path));
+        config.settings.set_install_dir(new_path);
+        assert_eq!(config.settings.install_dir(), PathBuf::from(new_path));
     }
 
     #[test]
