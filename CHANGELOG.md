@@ -1,3 +1,13 @@
+## [1.0.2](https://github.com/mhalder/oktofetch/compare/v1.0.1...v1.0.2) (2025-12-29)
+
+### Bug Fixes
+
+* preserve unexpanded paths in config file ([d209771](https://github.com/mhalder/oktofetch/commit/d2097712a90044a7247b182fe7b3e9b118ccc4e0)), closes [#6](https://github.com/mhalder/oktofetch/issues/6)
+
+### Documentation
+
+* improve README documentation ([e8df94f](https://github.com/mhalder/oktofetch/commit/e8df94f94f885c6fc8273c10fff2e2bfaab192b8)), closes [#4](https://github.com/mhalder/oktofetch/issues/4)
+
 ## [1.0.1](https://github.com/mhalder/oktofetch/compare/v1.0.0...v1.0.1) (2025-10-15)
 
 ### Bug Fixes
