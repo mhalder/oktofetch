@@ -1,6 +1,20 @@
 use crate::error::{OktofetchError, Result};
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
+
+/// Check if a file is an ELF binary by examining its magic header
+fn is_elf_binary(path: &Path) -> bool {
+    let Ok(mut file) = File::open(path) else {
+        return false;
+    };
+    let mut header = [0u8; 4];
+    if file.read_exact(&mut header).is_err() {
+        return false;
+    }
+    // ELF magic number is 0x7F 'E' 'L' 'F'
+    header == [0x7F, b'E', b'L', b'F']
+}
 
 pub fn find_binary(
     extracted_files: &[String],
@@ -9,7 +23,7 @@ pub fn find_binary(
 ) -> Result<PathBuf> {
     use std::os::unix::fs::PermissionsExt;
 
-    // Look for executable files
+    // Look for executable files (either by permission or by ELF signature)
     let mut executables = Vec::new();
 
     for file_name in extracted_files {
@@ -19,11 +33,17 @@ pub fn find_binary(
             continue;
         }
 
-        if let Ok(metadata) = fs::metadata(&file_path) {
+        // Check if file has execute permission OR is an ELF binary
+        // Some archives don't preserve execute bits, so we check the ELF header too
+        let is_executable = if let Ok(metadata) = fs::metadata(&file_path) {
             let permissions = metadata.permissions();
-            if permissions.mode() & 0o111 != 0 {
-                executables.push(file_path);
-            }
+            permissions.mode() & 0o111 != 0
+        } else {
+            false
+        };
+
+        if is_executable || is_elf_binary(&file_path) {
+            executables.push(file_path);
         }
     }
 
@@ -249,5 +269,60 @@ mod tests {
         // Check permissions
         let perms = fs::metadata(&dest).unwrap().permissions();
         assert_ne!(perms.mode() & 0o111, 0);
+    }
+
+    #[test]
+    fn test_find_binary_elf_without_execute_permission() {
+        // Test finding an ELF binary that doesn't have execute permissions set
+        // This is common with some archive creators (like terragrunt releases)
+        let temp_dir = TempDir::new().unwrap();
+        let binary_path = temp_dir.path().join("myapp");
+
+        // Create a fake ELF binary (with ELF magic header) but NO execute permission
+        let mut elf_data = vec![0x7F, b'E', b'L', b'F'];
+        elf_data.extend_from_slice(&[0u8; 100]); // Add some padding
+        fs::write(&binary_path, &elf_data).unwrap();
+
+        // Explicitly ensure no execute permission (should be default, but be explicit)
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&binary_path).unwrap().permissions();
+        perms.set_mode(0o644); // rw-r--r--, no execute bits
+        fs::set_permissions(&binary_path, perms).unwrap();
+
+        let files = vec!["myapp".to_string()];
+        let result = find_binary(&files, temp_dir.path(), "myapp");
+
+        // Should still find the binary due to ELF header detection
+        assert!(
+            result.is_ok(),
+            "Should find ELF binary without execute permission"
+        );
+        assert_eq!(result.unwrap().file_name().unwrap(), "myapp");
+    }
+
+    #[test]
+    fn test_is_elf_binary() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Test with ELF binary
+        let elf_path = temp_dir.path().join("elf_binary");
+        let mut elf_data = vec![0x7F, b'E', b'L', b'F'];
+        elf_data.extend_from_slice(&[0u8; 100]);
+        fs::write(&elf_path, &elf_data).unwrap();
+        assert!(is_elf_binary(&elf_path));
+
+        // Test with non-ELF file
+        let text_path = temp_dir.path().join("text_file");
+        fs::write(&text_path, b"This is just a text file").unwrap();
+        assert!(!is_elf_binary(&text_path));
+
+        // Test with empty file
+        let empty_path = temp_dir.path().join("empty");
+        File::create(&empty_path).unwrap();
+        assert!(!is_elf_binary(&empty_path));
+
+        // Test with nonexistent file
+        let nonexistent = temp_dir.path().join("nonexistent");
+        assert!(!is_elf_binary(&nonexistent));
     }
 }
