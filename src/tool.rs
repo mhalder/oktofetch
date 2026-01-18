@@ -1,3 +1,15 @@
+//! Tool management operations (add, update, remove, list).
+//!
+//! # Update Workflow
+//!
+//! 1. Validate platform (Linux x86_64)
+//! 2. Fetch latest release from GitHub API
+//! 3. Select matching asset (prefers tar.gz > zip > standalone binary)
+//! 4. Download asset to temporary directory
+//! 5. Extract archive
+//! 6. Find and install binary
+//! 7. Update version in config
+
 use crate::archive;
 use crate::binary;
 use crate::config::{Config, Tool};

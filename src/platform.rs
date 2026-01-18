@@ -1,3 +1,11 @@
+//! Platform detection and validation module.
+//!
+//! Currently supports Linux x86_64 only. Asset matching looks for release
+//! files containing "linux" AND one of: "x86_64", "amd64", or "x64".
+//!
+//! The matching is case-insensitive and uses substring matching to handle
+//! various naming conventions used by different projects.
+
 use crate::error::Result;
 
 pub fn validate_platform() -> Result<()> {
@@ -18,6 +26,7 @@ pub fn validate_platform() -> Result<()> {
 
 /// Checks if an asset name matches Linux x86_64 platform requirements.
 /// Looks for "linux" and one of: "x86_64", "amd64", or "x64".
+#[must_use]
 pub fn matches_asset_name(name: &str) -> bool {
     let name_lower = name.to_lowercase();
 

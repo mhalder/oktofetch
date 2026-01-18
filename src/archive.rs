@@ -1,5 +1,17 @@
+//! Archive extraction module for handling various compressed formats.
+//!
+//! Supports the following archive formats:
+//! - `.tar.gz` and `.tgz` (gzip-compressed tar)
+//! - `.tar.bz2` and `.tbz` (bzip2-compressed tar)
+//! - `.zip` archives
+//! - Standalone ELF binaries (detected via magic header)
+//!
+//! All extraction functions include path traversal protection to prevent
+//! directory escape attacks from malicious archives.
+
 use crate::error::{OktofetchError, Result};
 use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
@@ -20,14 +32,11 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<Vec<Strin
     }
 }
 
-fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
-    use flate2::read::GzDecoder;
+/// Extract files from a tar archive with the given reader (decoder).
+fn extract_tar<R: Read>(reader: R, dest_dir: &Path) -> Result<Vec<String>> {
     use tar::Archive;
 
-    let file = File::open(archive_path)?;
-    let gz = GzDecoder::new(file);
-    let mut archive = Archive::new(gz);
-
+    let mut archive = Archive::new(reader);
     let mut extracted_files = Vec::new();
 
     for entry in archive.entries()? {
@@ -59,43 +68,20 @@ fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
     Ok(extracted_files)
 }
 
-fn extract_tar_bz2(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
-    use bzip2::read::BzDecoder;
-    use tar::Archive;
+fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
+    use flate2::read::GzDecoder;
 
     let file = File::open(archive_path)?;
-    let bz = BzDecoder::new(file);
-    let mut archive = Archive::new(bz);
+    let decoder = GzDecoder::new(file);
+    extract_tar(decoder, dest_dir)
+}
 
-    let mut extracted_files = Vec::new();
+fn extract_tar_bz2(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
+    use bzip2::read::BzDecoder;
 
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?.to_path_buf();
-
-        // Security: prevent path traversal
-        if path
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
-        {
-            continue;
-        }
-
-        let dest_path = dest_dir.join(&path);
-
-        // Create parent directories if needed
-        if let Some(parent) = dest_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-
-        entry.unpack(&dest_path)?;
-
-        if let Some(path_str) = path.to_str() {
-            extracted_files.push(path_str.to_string());
-        }
-    }
-
-    Ok(extracted_files)
+    let file = File::open(archive_path)?;
+    let decoder = BzDecoder::new(file);
+    extract_tar(decoder, dest_dir)
 }
 
 fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<Vec<String>> {
@@ -254,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_extract_zip() {
-        use zip::write::{FileOptions, ZipWriter};
+        use zip::write::{SimpleFileOptions, ZipWriter};
 
         let temp_dir = TempDir::new().unwrap();
         let archive_path = temp_dir.path().join("test.zip");
@@ -262,7 +248,8 @@ mod tests {
         // Create a zip archive
         let file = fs::File::create(&archive_path).unwrap();
         let mut zip = ZipWriter::new(file);
-        zip.start_file("test.txt", FileOptions::default()).unwrap();
+        zip.start_file("test.txt", SimpleFileOptions::default())
+            .unwrap();
         zip.write_all(b"zip content").unwrap();
         zip.finish().unwrap();
 
@@ -343,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_extract_zip_with_dirs() {
-        use zip::write::{FileOptions, ZipWriter};
+        use zip::write::{SimpleFileOptions, ZipWriter};
 
         let temp_dir = TempDir::new().unwrap();
         let archive_path = temp_dir.path().join("test_dirs.zip");
@@ -353,11 +340,11 @@ mod tests {
         let mut zip = ZipWriter::new(file);
 
         // Add a directory
-        zip.add_directory("testdir/", FileOptions::default())
+        zip.add_directory("testdir/", SimpleFileOptions::default())
             .unwrap();
 
         // Add a file in that directory
-        zip.start_file("testdir/file.txt", FileOptions::default())
+        zip.start_file("testdir/file.txt", SimpleFileOptions::default())
             .unwrap();
         zip.write_all(b"content").unwrap();
         zip.finish().unwrap();
