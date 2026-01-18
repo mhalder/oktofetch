@@ -1,3 +1,9 @@
+## [1.0.4](https://github.com/mhalder/oktofetch/compare/v1.0.3...v1.0.4) (2026-01-18)
+
+### Code Refactoring
+
+* update dependencies and modernize codebase ([e99ef2a](https://github.com/mhalder/oktofetch/commit/e99ef2ad36fc8c58621307b676fcb41fb61a6c0b))
+
 ## [1.0.3](https://github.com/mhalder/oktofetch/compare/v1.0.2...v1.0.3) (2025-12-29)
 
 ### Bug Fixes
