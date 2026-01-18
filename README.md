@@ -18,6 +18,17 @@ A CLI tool to manage GitHub release binaries for Linux x86_64. Automatically dow
 - **GitHub Token Support** - Works with both classic and fine-grained personal access tokens
 - **Path Expansion** - Supports `~` and environment variables in configuration
 
+## Requirements
+
+### Minimum Supported Rust Version (MSRV)
+
+Rust 1.85.0 or later is required (edition 2024).
+
+### Build Dependencies
+
+- OpenSSL development libraries (`libssl-dev` on Debian/Ubuntu, `openssl-devel` on Fedora/RHEL)
+- pkg-config
+
 ## Installation
 
 ### From crates.io
@@ -196,6 +207,10 @@ Currently supports **Linux x86_64** only. Asset matching looks for:
 | 9    | Binary not found in archive      |
 | 10   | IO error                         |
 | 11   | HTTP error                       |
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 

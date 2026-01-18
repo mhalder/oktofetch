@@ -1,3 +1,23 @@
+//! Configuration management for oktofetch.
+//!
+//! Configuration is stored in TOML format at `~/.config/oktofetch/config.toml`.
+//!
+//! # Config File Structure
+//!
+//! ```toml
+//! [settings]
+//! install_dir = "~/.local/bin"
+//!
+//! [[tools]]
+//! name = "k9s"
+//! repo = "derailed/k9s"
+//! version = "v0.32.5"
+//! ```
+//!
+//! Path expansion supports:
+//! - Tilde expansion: `~/bin` → `/home/user/bin`
+//! - Environment variables: `$HOME/.local/bin` or `${HOME}/.local/bin`
+
 use crate::error::{OktofetchError, Result};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};

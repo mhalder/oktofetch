@@ -1,3 +1,13 @@
+//! Binary detection and installation module.
+//!
+//! Provides functionality to:
+//! - Find executable binaries in extracted archive contents
+//! - Detect ELF binaries via magic header (`0x7F 'E' 'L' 'F'`)
+//! - Install binaries to the configured directory with proper permissions
+//!
+//! ELF detection is used as a fallback when archives don't preserve execute
+//! permissions, which is common with some archive creators.
+
 use crate::error::{OktofetchError, Result};
 use std::fs::{self, File};
 use std::io::Read;

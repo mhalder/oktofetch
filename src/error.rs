@@ -1,3 +1,20 @@
+//! Error types and exit codes for oktofetch.
+//!
+//! # Exit Codes
+//!
+//! | Code | Description                      |
+//! |------|----------------------------------|
+//! | 0    | Success                          |
+//! | 1    | Tool not found / General error   |
+//! | 2    | GitHub API error                 |
+//! | 3    | No suitable release for platform |
+//! | 4    | Configuration error              |
+//! | 7    | Download failed                  |
+//! | 8    | Extraction failed                |
+//! | 9    | Binary not found in archive      |
+//! | 10   | IO error                         |
+//! | 11   | HTTP error                       |
+
 use std::io;
 use std::path::PathBuf;
 use thiserror::Error;

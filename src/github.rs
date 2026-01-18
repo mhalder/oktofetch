@@ -1,3 +1,12 @@
+//! GitHub API client for fetching releases and downloading assets.
+//!
+//! Supports authentication via the `GITHUB_TOKEN` environment variable.
+//! Both classic tokens and fine-grained personal access tokens (`github_pat_*`)
+//! are supported, with automatic detection of the appropriate authorization header.
+//!
+//! Rate limiting: Without a token, the GitHub API allows 60 requests/hour.
+//! With a token, this increases to 5,000 requests/hour.
+
 use crate::error::{OktofetchError, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -19,6 +28,12 @@ pub struct Asset {
 pub struct GithubClient {
     client: Client,
     token: Option<String>,
+}
+
+impl Default for GithubClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GithubClient {
